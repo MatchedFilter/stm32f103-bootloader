@@ -17,9 +17,9 @@
 
   "clangd.path": "/usr/bin/clangd-22",
   
-  // Tell clangd where to find the compilation database
   "clangd.arguments": [
     "--fallback-style=none",
-    "--compile-commands-dir=${workspaceFolder}/build"
+    "--compile-commands-dir=/workspace/stm32f103-bootloader/build",
+    "--query-driver=/usr/bin/arm-none-eabi-*"
   ]
 }
