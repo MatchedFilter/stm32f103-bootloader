@@ -1,0 +1,25 @@
+{
+  "[c]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+  "[cpp]": {
+    "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true
+  },
+
+  "editor.rulers": [100],
+  "C_Cpp.formatting": "Disabled",
+
+  "clangd.path": "/usr/bin/clangd-22",
+  
+  // Tell clangd where to find the compilation database
+  "clangd.arguments": [
+    "--fallback-style=none",
+    "--compile-commands-dir=${workspaceFolder}/build"
+  ]
+}

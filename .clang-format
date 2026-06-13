@@ -1,0 +1,58 @@
+
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# --- Core Dimensions ---
+ColumnLimit: 100
+IndentWidth: 2
+ContinuationIndentWidth: 2
+TabWidth: 2
+UseTab: Never
+
+# --- Brace Wrapping (Allman Style) ---
+BreakBeforeBraces: Allman
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: Always
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  BeforeCatch: true
+  BeforeElse: true
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+# --- Embedded & STM32 Specific Tweaks ---
+AlignAfterOpenBracket: Align
+AlignConsecutiveDeclarations: None
+AlignOperands: AlignAfterOperator
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+
+# Keeps your HAL include guards and macros from turning into a complete mess
+IndentPPDirectives: AfterHash
+IncludeBlocks: Regroup
+
+
+# Forces a space after a type cast: (void) memcpy(...) -> (void) memcpy(...)
+SpaceAfterCStyleCast: true
+
+# Vertically aligns assignment operators (=) across consecutive lines
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+
+
+LineEnding: LF
+InsertNewlineAtEOF: true
