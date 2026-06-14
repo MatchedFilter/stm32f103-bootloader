@@ -26,9 +26,10 @@ uint8_t usb_rx_buffer[64]       = {0};
 volatile uint32_t usb_rx_len    = 0;
 volatile uint8_t usb_data_ready = 0;
 
-#define JUMP_ADDRESS   0x08002000
-#define MAGIC_WORD     "enter bootloader"
-#define MAGIC_WORD_LEN 16
+#define JUMP_ADDRESS         (uint32_t) (0x08004000)
+#define CONFIG_FLASH_ADDRESS (uint32_t) (0x0801F400)
+#define MAGIC_WORD           "enter bootloader"
+#define MAGIC_WORD_LEN       16
 
 // Streaming character line buffer configuration
 #define SREC_MAX_LINE_LEN 128
@@ -87,6 +88,23 @@ int main(void)
 
     // Unlock internal microcontroller flash memory storage sectors once globally
     HAL_FLASH_Unlock();
+
+    FLASH_EraseInitTypeDef EraseInitStruct;
+    uint32_t PageError = 0;
+
+    EraseInitStruct.TypeErase   = FLASH_TYPEERASE_PAGES;
+    EraseInitStruct.PageAddress = JUMP_ADDRESS;
+
+    /* TOTAL PAGES = 128 (128KB total)
+     * Bootloader uses 16 pages (0 to 15).
+     * Config page uses the final 3 pages for margin safety (125 to 127).
+     * Pages left over for Application code space = 128 - 16 - 3 = 109 pages. */
+    EraseInitStruct.NbPages = 109;
+
+    if (HAL_FLASHEx_Erase(&EraseInitStruct, &PageError) != HAL_OK)
+    {
+      Error_Handler();
+    }
 
     while (1)
     {
@@ -197,7 +215,7 @@ static void process_srec_line(char *line)
     }
 
     // Safety guard filter to ensure we are only writing inside designated app space boundaries
-    if (target_address < JUMP_ADDRESS)
+    if ((target_address < JUMP_ADDRESS) || (target_address >= CONFIG_FLASH_ADDRESS))
     {
       uint8_t error_tick[] = "?"; // Send error flag for bad address mapping
       blocking_usb_transmit(error_tick, 1);

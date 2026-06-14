@@ -6,6 +6,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CMAKE_C_FLAGS_RELEASE "-Os -flto -fdata-sections -ffunction-sections" CACHE STRING "" FORCE)
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "-Wl,--gc-sections -flto" CACHE STRING "" FORCE)
     add_compile_options(
         -mcpu=cortex-m3
         -mthumb
@@ -13,7 +15,8 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         -Wextra
         -fdata-sections
         -ffunction-sections
-        -Os -g3
+        -Os
+        -flto
     )
 
     add_link_options(
@@ -21,6 +24,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         -mthumb
         -specs=nano.specs
         -Wl,--gc-sections
+        -flto
         -Wl,-Map=${PROJECT_NAME}.map,--cref
         -T${CMAKE_CURRENT_SOURCE_DIR}/src/STM32F103C8Tx_FLASH.ld
     )
@@ -40,8 +44,25 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
 
     file(GLOB_RECURSE SOURCES 
         "src/*.c"
-        "bsp/drivers/STM32F1xx_HAL_Driver/Src/*.c"
-        "bsp/drivers/STM32_USB_Device_Library/*.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_cortex.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_rcc_ex.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_flash.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_flash_ex.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_gpio_ex.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pwr.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal_pcd_ex.c"
+        "bsp/drivers/STM32F1xx_HAL_Driver/Src/stm32f1xx_ll_usb.c"
+
+
+        "bsp/drivers/STM32_USB_Device_Library/Core/Src/usbd_core.c"
+        "bsp/drivers/STM32_USB_Device_Library/Core/Src/usbd_ctlreq.c"
+        "bsp/drivers/STM32_USB_Device_Library/Core/Src/usbd_ioreq.c"
+        "bsp/drivers/STM32_USB_Device_Library/Class/CDC/Src/usbd_cdc.c"
+
         "bsp/Core/Src/*.c"
         "bsp/Core/Src/*.s"
     )
