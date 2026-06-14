@@ -29,6 +29,8 @@ static NVIC_Type nvic_stub = {0};
 NVIC_Type *NVIC            = &nvic_stub;
 
 USBD_HandleTypeDef hUsbDeviceFS;
+static USBD_CDC_HandleTypeDef class_data;
+static int serial_port_fd = -1;
 
 static void *serial_rx_thread(void *arg);
 static int configure_serial_port(const char *port_name);
@@ -45,17 +47,18 @@ void HAL_Init(void)
 
 void MX_USB_DEVICE_Init(void)
 {
-  const char *port_name = "ttyUSB0";
+  hUsbDeviceFS.pClassData = &class_data;
+  const char *port_name   = "ttyUSB0";
 
-  int fd = configure_serial_port(port_name);
-  if (fd < 0)
+  serial_port_fd = configure_serial_port(port_name);
+  if (serial_port_fd < 0)
   {
     fprintf(stderr, "Unable to open serial port: %s\n", port_name);
     exit(127);
   }
 
   thread_config_t config;
-  config.fd           = fd;
+  config.fd           = serial_port_fd;
   config.keep_running = true;
 
   pthread_t rx_thread_id;
@@ -73,7 +76,7 @@ void __NOP(void)
 uint8_t CDC_Transmit_FS(uint8_t *Buf, uint16_t Len)
 {
   (void) Len;
-  return (uint8_t) fprintf(stdout, "%s", (char *) Buf);
+  return (uint8_t) write(serial_port_fd, Buf, Len);
 }
 
 HAL_StatusTypeDef HAL_FLASH_Unlock(void)
@@ -167,6 +170,11 @@ HAL_StatusTypeDef HAL_RCCEx_PeriphCLKConfig(RCC_PeriphCLKInitTypeDef *PeriphClkI
 {
   (void) PeriphClkInit;
   return HAL_OK;
+}
+
+void NVIC_SystemReset(void)
+{
+  fprintf(stdout, "Reset\n");
 }
 
 // This function runs entirely in a separate thread

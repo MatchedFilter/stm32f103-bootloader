@@ -13,9 +13,12 @@ void Boot_Application(void);
 void Force_USB_Reenumeration(void);
 
 // Helper functions for parsing SREC lines
-uint8_t Parse_Hex_Nibble(char c);
-uint8_t Parse_Hex_Byte(const char *ptr);
-void Process_Srec_Line(char *line);
+static uint8_t parse_hex_nibble(char c);
+static uint8_t parse_hex_byte(const char *ptr);
+static void process_line(char *line);
+static void process_srec_line(char *line);
+
+static void blocking_usb_transmit(uint8_t *buffer, uint16_t length);
 
 // Shared variables for USB interrupt handling
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -24,8 +27,8 @@ volatile uint32_t usb_rx_len    = 0;
 volatile uint8_t usb_data_ready = 0;
 
 #define JUMP_ADDRESS   0x08002000
-#define MAGIC_WORD     "UPDATE"
-#define MAGIC_WORD_LEN 6
+#define MAGIC_WORD     "enter bootloader"
+#define MAGIC_WORD_LEN 16
 
 // Streaming character line buffer configuration
 #define SREC_MAX_LINE_LEN 128
@@ -43,7 +46,11 @@ int main(void)
   // 2. Initialize the USB Virtual Com Port Stack
   MX_USB_DEVICE_Init();
 
-  // 3. Wait for the magic word with a timeout window
+  // 3. Announce boot sequence tracking immediately for the Python app phase 1
+  uint8_t booting_message[] = "booting\n";
+  blocking_usb_transmit(booting_message, strlen((char *) booting_message));
+
+  // 4. Wait for the magic word with a timeout window
   uint32_t timeout    = TIMEOUT_LOOP_COUNT;
   uint8_t update_mode = 0;
 
@@ -52,6 +59,16 @@ int main(void)
     if (usb_data_ready)
     {
       usb_data_ready = 0;
+
+      // If Python sends a reset command during this window instead, process it
+      if (usb_rx_len >= 5 && memcmp(usb_rx_buffer, "reset", 5) == 0)
+      {
+        static uint8_t reset_ack[] = "reset ack\n";
+        blocking_usb_transmit(reset_ack, (uint16_t) strlen((char *) reset_ack));
+        HAL_Delay(100); // Small cushion to allow USB transmission to finish
+        NVIC_SystemReset();
+      }
+
       if (usb_rx_len >= MAGIC_WORD_LEN && memcmp(usb_rx_buffer, MAGIC_WORD, MAGIC_WORD_LEN) == 0)
       {
         update_mode = 1;
@@ -65,8 +82,8 @@ int main(void)
   if (update_mode)
   {
     // Match! Notify host machine that bootloader is accepting streaming SREC files
-    uint8_t ack[] = "BOOTLOADER_READY: SEND SREC NOW\r\n";
-    CDC_Transmit_FS(ack, strlen((char *) ack));
+    uint8_t ack[] = "enter bootloader ack\n";
+    blocking_usb_transmit(ack, strlen((char *) ack));
 
     // Unlock internal microcontroller flash memory storage sectors once globally
     HAL_FLASH_Unlock();
@@ -88,7 +105,7 @@ int main(void)
             if (line_index > 0)
             {
               line_buffer[line_index] = '\0'; // Null-terminate string array
-              Process_Srec_Line(line_buffer); // Parse line block
+              process_line(line_buffer);      // Parse line block
               line_index = 0;                 // Reset line processing tracker
             }
           }
@@ -108,7 +125,7 @@ int main(void)
 }
 
 // Low-level helper parsing utilities
-uint8_t Parse_Hex_Nibble(char c)
+static uint8_t parse_hex_nibble(char c)
 {
   if (c >= '0' && c <= '9')
     return c - '0';
@@ -119,12 +136,33 @@ uint8_t Parse_Hex_Nibble(char c)
   return 0;
 }
 
-uint8_t Parse_Hex_Byte(const char *ptr)
+static uint8_t parse_hex_byte(const char *ptr)
 {
-  return (Parse_Hex_Nibble(ptr[0]) << 4) | Parse_Hex_Nibble(ptr[1]);
+  return (parse_hex_nibble(ptr[0]) << 4) | parse_hex_nibble(ptr[1]);
 }
 
-void Process_Srec_Line(char *line)
+static void process_line(char *line)
+{
+  // Note: Newline characters are stripped by main's parser loop before hitting here
+  if (strcmp(line, "reset") == 0)
+  {
+    static uint8_t reset_ack[] = "reset ack\n";
+    blocking_usb_transmit(reset_ack, (uint16_t) strlen((char *) reset_ack));
+    HAL_Delay(100);
+    NVIC_SystemReset();
+  }
+  else if (strcmp(line, "enter bootloader") == 0)
+  {
+    static uint8_t enter_bootloader_ack[] = "enter bootloader ack\n";
+    blocking_usb_transmit(enter_bootloader_ack, (uint16_t) strlen((char *) enter_bootloader_ack));
+  }
+  else
+  {
+    process_srec_line(line);
+  }
+}
+
+static void process_srec_line(char *line)
 {
   // Verify line frame validity
   if (line[0] != 'S')
@@ -133,7 +171,7 @@ void Process_Srec_Line(char *line)
   char record_type = line[1];
 
   // Unpack Byte Count parameter
-  uint8_t byte_count = Parse_Hex_Byte(&line[2]);
+  uint8_t byte_count = parse_hex_byte(&line[2]);
 
   // We track running checksum calculation validation
   uint32_t running_checksum = byte_count;
@@ -141,6 +179,9 @@ void Process_Srec_Line(char *line)
   // Track scanning references inside our string text indices
   uint16_t ptr_idx = 4;
 
+  // ---------------------------------------------------------------------------
+  // CASE A: DATA RECORDS (S1, S2, S3)
+  // ---------------------------------------------------------------------------
   if (record_type == '1' || record_type == '2' || record_type == '3')
   {
     uint8_t addr_bytes      = (record_type == '1') ? 2 : ((record_type == '2') ? 3 : 4);
@@ -149,32 +190,33 @@ void Process_Srec_Line(char *line)
     // Decode target memory destination address bytes
     for (uint8_t i = 0; i < addr_bytes; i++)
     {
-      uint8_t b         = Parse_Hex_Byte(&line[ptr_idx]);
+      uint8_t b         = parse_hex_byte(&line[ptr_idx]);
       target_address    = (target_address << 8) | b;
       running_checksum += b;
       ptr_idx          += 2;
     }
 
-    // Safety guard filter to ensure we are only writing safely inside designated app space
-    // boundaries
+    // Safety guard filter to ensure we are only writing inside designated app space boundaries
     if (target_address < JUMP_ADDRESS)
+    {
+      uint8_t error_tick[] = "?"; // Send error flag for bad address mapping
+      blocking_usb_transmit(error_tick, 1);
       return;
+    }
 
     // Unpack data chunks and commit them down to flash storage
-    // Remaining bytes to scan = total byte_count minus address bytes minus 1 checksum byte
     uint8_t data_bytes_count = byte_count - addr_bytes - 1;
 
     for (uint8_t i = 0; i < data_bytes_count; i += 2)
     {
-      // Extract 16-bit halfwords (STM32 flash API performs best writing 16-bit or 32-bit blocks)
-      uint8_t byte1     = Parse_Hex_Byte(&line[ptr_idx]);
+      uint8_t byte1     = parse_hex_byte(&line[ptr_idx]);
       running_checksum += byte1;
       ptr_idx          += 2;
 
       uint8_t byte2 = 0xFF; // Pad if odd data length
       if (i + 1 < data_bytes_count)
       {
-        byte2             = Parse_Hex_Byte(&line[ptr_idx]);
+        byte2             = parse_hex_byte(&line[ptr_idx]);
         running_checksum += byte2;
         ptr_idx          += 2;
       }
@@ -185,18 +227,34 @@ void Process_Srec_Line(char *line)
       HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, target_address + i, flash_halfword);
     }
 
-    // Send feedback confirmation dot back across CDC channel to acknowledge successful line parse
+    // Send confirmation tick for data line processing completion
     uint8_t tick[] = ".";
-    CDC_Transmit_FS(tick, 1);
+    blocking_usb_transmit(tick, 1);
   }
+  // ---------------------------------------------------------------------------
+  // CASE B: HEADER RECORD (S0)
+  // ---------------------------------------------------------------------------
+  else if (record_type == '0')
+  {
+    // Acknowledge the metadata line immediately so Python can safely send the next line
+    uint8_t tick[] = ".";
+    blocking_usb_transmit(tick, 1);
+  }
+  // ---------------------------------------------------------------------------
+  // CASE C: TERMINATION RECORDS (S7, S8, S9)
+  // ---------------------------------------------------------------------------
   else if (record_type == '7' || record_type == '8' || record_type == '9')
   {
-    // Termination record encountered! Lock down memory, send ACK and jump
-    HAL_FLASH_Lock();
-    uint8_t complete_msg[] = "\r\nFLASH_SUCCESS! REBOOTING APPLICATON\r\n";
-    CDC_Transmit_FS(complete_msg, strlen((char *) complete_msg));
+    // First, send the final tick so Python knows the line was consumed safely
+    uint8_t tick[] = ".";
+    blocking_usb_transmit(tick, 1);
 
-    HAL_Delay(500); // Give host machine short moment to print string out over serial logs
+    // Lock down memory and transmit the final completion flag string
+    HAL_FLASH_Lock();
+    uint8_t complete_msg[] = "FLASH_SUCCESS\n";
+    blocking_usb_transmit(complete_msg, strlen((char *) complete_msg));
+
+    HAL_Delay(500); // Give the host machine time to read the buffer before jumping
     Boot_Application();
   }
 }
@@ -283,4 +341,17 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+static void blocking_usb_transmit(uint8_t *buffer, uint16_t length)
+{
+  extern USBD_HandleTypeDef hUsbDeviceFS;
+  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *) hUsbDeviceFS.pClassData;
+
+  // Wait until the prior packet transmission state drops to 0 (Idle)
+  while (hcdc->TxState != 0)
+  {
+  }
+
+  CDC_Transmit_FS(buffer, length);
 }

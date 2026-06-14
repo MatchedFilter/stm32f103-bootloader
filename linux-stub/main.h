@@ -13,6 +13,8 @@
 #define GPIO_SPEED_FREQ_LOW    1
 #define RCC_OSCILLATORTYPE_HSE 0x00000001U
 
+#define CDC_DATA_HS_MAX_PACKET_SIZE 512U /* Endpoint IN & OUT Packet size */
+
 #define RCC_HSE_ON              0
 #define RCC_HSE_PREDIV_DIV1     0
 #define RCC_HSI_ON              0
@@ -95,6 +97,20 @@ typedef enum
   HAL_BUSY    = 0x02U,
   HAL_TIMEOUT = 0x03U
 } HAL_StatusTypeDef;
+
+typedef struct
+{
+  uint32_t data[CDC_DATA_HS_MAX_PACKET_SIZE / 4U]; /* Force 32bits alignment */
+  uint8_t CmdOpCode;
+  uint8_t CmdLength;
+  uint8_t *RxBuffer;
+  uint8_t *TxBuffer;
+  uint32_t RxLength;
+  uint32_t TxLength;
+
+  uint32_t TxState;
+  uint32_t RxState;
+} USBD_CDC_HandleTypeDef;
 
 typedef struct
 {
@@ -220,6 +236,8 @@ extern HAL_StatusTypeDef HAL_RCC_OscConfig(RCC_OscInitTypeDef *RCC_OscInitStruct
 extern HAL_StatusTypeDef HAL_RCC_ClockConfig(RCC_ClkInitTypeDef *RCC_ClkInitStruct,
                                              uint32_t FLatency);
 extern HAL_StatusTypeDef HAL_RCCEx_PeriphCLKConfig(RCC_PeriphCLKInitTypeDef *PeriphClkInit);
+
+extern void NVIC_SystemReset(void);
 
 extern const uint32_t *GPIOA;
 extern const uint32_t *GPIOB;
