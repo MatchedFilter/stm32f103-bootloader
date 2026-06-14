@@ -23,7 +23,7 @@
   
   "clangd.arguments": [
     "--fallback-style=none",
-    "--compile-commands-dir=/workspace/stm32f103-bootloader/build",
+    "--compile-commands-dir=/workspace/stm32f103-bootloader/build/stm32/Debug",
     "--query-driver=/usr/bin/arm-none-eabi-*"
   ],
   "lldb-dap.executable-path": "/usr/bin/lldb-dap-18"

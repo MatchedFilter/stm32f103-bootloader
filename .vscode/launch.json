@@ -5,7 +5,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "name": "LLDB-DAP: Launch Linux App",
-            "program": "${workspaceFolder}/build/Linux/Debug/stm32f103-bootloader.elf",
+            "program": "${workspaceFolder}/build/Linux/Debug/stm32f103-bootloader",
             "args": [],
             "cwd": "${workspaceFolder}/build/Linux/Debug/",
             "env": [],

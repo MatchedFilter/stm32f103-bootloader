@@ -4,9 +4,6 @@ project(stm32f103-bootloader C ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-file (GLOB_RECURSE COMMON_SRCS
-    src/Common/*.c
-)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_options(
@@ -42,8 +39,7 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 
     file(GLOB_RECURSE SOURCES 
-        "src/Stm32/*.c"
-        "src/Stm32/*.s"
+        "src/*.c"
         "bsp/drivers/STM32F1xx_HAL_Driver/Src/*.c"
         "bsp/drivers/STM32_USB_Device_Library/*.c"
         "bsp/Core/Src/*.c"
@@ -73,18 +69,19 @@ else()
     message(STATUS "Configuring Target: Native Linux Execution Utility")
 
     add_compile_options(-Wall -Wextra -O0 -g)
-    file(GLOB_RECURSE SOURCES 
-        "src/Linux/*.c"
+    file(GLOB_RECURSE SOURCES
+        "src/*.c"
+        "linux-stub/*.c"
     )
 
-    add_executable(${PROJECT_NAME}.elf
+    add_executable(${PROJECT_NAME}
         ${SOURCES}
         ${COMMON_SRCS}
     )
+    target_include_directories(${PROJECT_NAME} PRIVATE linux-stub)
     
 
 endif()
 
-target_include_directories(${PROJECT_NAME}.elf PRIVATE src)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

@@ -53,6 +53,10 @@ AlignConsecutiveAssignments:
   AcrossComments: false
   AlignCompound: true
 
-
 LineEnding: LF
 InsertNewlineAtEOF: true
+
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
