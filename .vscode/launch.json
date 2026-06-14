@@ -1,0 +1,20 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb-dap",
+            "request": "launch",
+            "name": "LLDB-DAP: Launch Linux App",
+            "program": "${workspaceFolder}/build/Linux/Debug/stm32f103-bootloader.elf",
+            "args": [],
+            "cwd": "${workspaceFolder}/build/Linux/Debug/",
+            "env": [],
+            "stopOnEntry": false,
+            "disableASLR": false,
+            "initCommands": [
+                "settings set target.disable-aslr false"
+            ],
+            "postRunCommands": []
+        }
+    ]
+}

@@ -13,7 +13,11 @@
   },
 
   "editor.rulers": [100],
-  "C_Cpp.formatting": "Disabled",
+  "C_Cpp.formatting": "disabled",
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.enhancedColorization": "disabled",
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
 
   "clangd.path": "/usr/bin/clangd-22",
   
@@ -21,5 +25,6 @@
     "--fallback-style=none",
     "--compile-commands-dir=/workspace/stm32f103-bootloader/build",
     "--query-driver=/usr/bin/arm-none-eabi-*"
-  ]
+  ],
+  "lldb-dap.executable-path": "/usr/bin/lldb-dap-18"
 }

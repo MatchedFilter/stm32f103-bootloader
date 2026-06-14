@@ -8,6 +8,7 @@
 void SystemClock_Config(void);
 void Boot_Application(void);
 void Force_USB_Reenumeration(void);
+void MX_GPIO_Init(void); // Prototype for our new test LED initialization function
 
 // Shared variables for USB interrupt handling
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -28,7 +29,20 @@ int main(void)
   HAL_Init();
   SystemClock_Config();
 
-  // 2. Initialize the USB Virtual Com Port Stack
+  // Initialize the PC13 LED pin
+  MX_GPIO_Init();
+
+  // ---------------------------------------------------------------------------
+  // TEST BLINKY TRAP: Bypassing timeout checks to verify successful execution
+  // ---------------------------------------------------------------------------
+  while (1)
+  {
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    HAL_Delay(250); // Blink state changes every 250ms
+  }
+  // ---------------------------------------------------------------------------
+
+  // 2. Initialize the USB Virtual Com Port Stack (Preserved original sequence below)
   MX_USB_DEVICE_Init();
 
   // 3. Wait for the magic word with a timeout window
@@ -71,6 +85,25 @@ int main(void)
     // Timeout -> Jump straight to closed-up Incubator App
     Boot_Application();
   }
+}
+
+void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* Enable GPIOC clock bank */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /* Configure Pin 13 tracking parameters */
+  GPIO_InitStruct.Pin   = GPIO_PIN_13;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP; // Push-Pull mode
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;         // No internal resistors
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Low frequency safe layout
+
+  /* Set default state to high (turns Blue Pill LED off initially) */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }
 
 void Force_USB_Reenumeration(void)

@@ -2,12 +2,32 @@
   "version": 3,
   "configurePresets": [
     {
-      "name": "docker-build",
-      "displayName": "Docker ARM Build",
+      "name": "stm32-debug",
+      "displayName": "STM32 Debug Build",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/stm32/Debug",
       "toolchainFile": "${sourceDir}/arm-none-eabi-toolchain.cmake",
       "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "stm32-release",
+      "displayName": "STM32 ReleaseBuild",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/stm32/Release",
+      "toolchainFile": "${sourceDir}/arm-none-eabi-toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-debug",
+      "displayName": "Linux Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Linux/Debug",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "Linux",
         "CMAKE_BUILD_TYPE": "Debug"
       }
     }
