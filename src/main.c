@@ -1,5 +1,6 @@
 #include "main.h"
 
+#include "stm32f1xx_hal_gpio.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 
@@ -19,12 +20,14 @@ static void process_line(char *line);
 static void process_srec_line(char *line);
 
 static void blocking_usb_transmit(uint8_t *buffer, uint16_t length);
+static void led_gpio_init(void);
 
 // Shared variables for USB interrupt handling
 extern USBD_HandleTypeDef hUsbDeviceFS;
-uint8_t usb_rx_buffer[64]       = {0};
-volatile uint32_t usb_rx_len    = 0;
-volatile uint8_t usb_data_ready = 0;
+uint8_t usb_rx_buffer[64]         = {0};
+volatile uint32_t usb_rx_len      = 0;
+volatile uint8_t usb_data_ready   = 0;
+volatile uint8_t usb_port_is_open = 0;
 
 #define JUMP_ADDRESS         (uint32_t) (0x08004000)
 #define CONFIG_FLASH_ADDRESS (uint32_t) (0x0801F400)
@@ -38,46 +41,57 @@ uint16_t line_index = 0;
 
 int main(void)
 {
-  // 1. Force the host PC to re-enumerate the USB device before anything else
   Force_USB_Reenumeration();
-
   HAL_Init();
   SystemClock_Config();
-
-  // 2. Initialize the USB Virtual Com Port Stack
   MX_USB_DEVICE_Init();
+  led_gpio_init();
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
-  // 3. Announce boot sequence tracking immediately for the Python app phase 1
-  uint8_t booting_message[] = "booting\n";
-  blocking_usb_transmit(booting_message, strlen((char *) booting_message));
-
-  // 4. Wait for the magic word with a timeout window
-  uint32_t timeout    = TIMEOUT_LOOP_COUNT;
   uint8_t update_mode = 0;
-
-  while (timeout > 0)
+  for (uint8_t i = 0U; i < TIMEOUT_LOOP_COUNT; i++)
   {
-    if (usb_data_ready)
+    // Soft-toggle the LED so you have a visual cue that it's waiting for the PC app
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    HAL_Delay(100);
+  }
+  if (usb_port_is_open)
+  {
+    uint8_t booting_message[] = "booting\n";
+    blocking_usb_transmit(booting_message, strlen((char *) booting_message));
+
+    // 4. Wait for the magic word with a timeout window
+    uint32_t timeout = TIMEOUT_LOOP_COUNT;
+
+    while (timeout > 0)
     {
-      usb_data_ready = 0;
-
-      // If Python sends a reset command during this window instead, process it
-      if (usb_rx_len >= 5 && memcmp(usb_rx_buffer, "reset", 5) == 0)
+      if (usb_data_ready)
       {
-        static uint8_t reset_ack[] = "reset ack\n";
-        blocking_usb_transmit(reset_ack, (uint16_t) strlen((char *) reset_ack));
-        HAL_Delay(100); // Small cushion to allow USB transmission to finish
-        NVIC_SystemReset();
-      }
+        usb_data_ready = 0;
 
-      if (usb_rx_len >= MAGIC_WORD_LEN && memcmp(usb_rx_buffer, MAGIC_WORD, MAGIC_WORD_LEN) == 0)
-      {
-        update_mode = 1;
-        break;
+        // If Python sends a reset command during this window instead, process it
+        if (usb_rx_len >= 5 && memcmp(usb_rx_buffer, "reset", 5) == 0)
+        {
+          static uint8_t reset_ack[] = "reset ack\n";
+          blocking_usb_transmit(reset_ack, (uint16_t) strlen((char *) reset_ack));
+          HAL_Delay(100); // Small cushion to allow USB transmission to finish
+          NVIC_SystemReset();
+        }
+
+        if (usb_rx_len >= MAGIC_WORD_LEN && memcmp(usb_rx_buffer, MAGIC_WORD, MAGIC_WORD_LEN) == 0)
+        {
+          update_mode = 1;
+          break;
+        }
       }
+      HAL_Delay(1);
+      timeout--;
+      if (timeout % 100 == 0)
+      {
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+      }
+      __NOP(); // No-operation to prevent compiler optimizing the empty loop away
     }
-    timeout--;
-    __NOP(); // No-operation to prevent compiler optimizing the empty loop away
   }
 
   if (update_mode)
@@ -137,6 +151,7 @@ int main(void)
   }
   else
   {
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
     // Timeout -> Jump straight to application
     Boot_Application();
   }
@@ -296,6 +311,12 @@ void Force_USB_Reenumeration(void)
 void Boot_Application(void)
 {
   USBD_DeInit(&hUsbDeviceFS);
+
+  __HAL_RCC_USB_FORCE_RESET();
+  for (volatile uint32_t i = 0; i < 10000; i++)
+    ;
+  __HAL_RCC_USB_RELEASE_RESET();
+
   HAL_RCC_DeInit();
   HAL_DeInit();
 
@@ -312,6 +333,7 @@ void Boot_Application(void)
   uint32_t JumpAddress        = *(__IO uint32_t *) (JUMP_ADDRESS + 4);
   pFunction JumpToApplication = (pFunction) JumpAddress;
 
+  SCB->VTOR = JUMP_ADDRESS;
   __set_MSP(*(__IO uint32_t *) JUMP_ADDRESS);
   JumpToApplication();
 }
@@ -363,13 +385,26 @@ void SystemClock_Config(void)
 
 static void blocking_usb_transmit(uint8_t *buffer, uint16_t length)
 {
-  extern USBD_HandleTypeDef hUsbDeviceFS;
-  USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *) hUsbDeviceFS.pClassData;
-
-  // Wait until the prior packet transmission state drops to 0 (Idle)
-  while (hcdc->TxState != 0)
+  while (CDC_Transmit_FS(buffer, length) == USBD_BUSY)
   {
   }
+}
 
-  CDC_Transmit_FS(buffer, length);
+static void led_gpio_init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  /* Enable GPIOC clock bank */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /* Configure Pin 13 tracking parameters */
+  GPIO_InitStruct.Pin   = GPIO_PIN_13;
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP; // Push-Pull mode
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;         // No internal resistors
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW; // Low frequency safe layout
+
+  /* Set default state to high (turns Blue Pill LED off initially) */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 }

@@ -47,7 +47,7 @@ extern "C"
   /* Exported macro ------------------------------------------------------------*/
   /* USER CODE BEGIN EM */
 
-#define TIMEOUT_LOOP_COUNT 200000
+#define TIMEOUT_LOOP_COUNT 20
 
   /* USER CODE END EM */
 

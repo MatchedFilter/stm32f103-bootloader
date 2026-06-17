@@ -94,7 +94,7 @@ uint8_t UserRxBufferFS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-
+extern volatile uint8_t usb_port_is_open;
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -225,7 +225,22 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
     break;
 
   case CDC_SET_CONTROL_LINE_STATE:
-
+    /* pbuf points to the setup request payload setup data array.
+       pbuf[2] holds the low byte of the wValue field (Control Signal Bitmap):
+       Bit 0: DTR (Data Terminal Ready) - Set to 1 when terminal opens the port.
+       Bit 1: RTS (Request To Send)
+    */
+    if (pbuf != NULL)
+    {
+      if (pbuf[2] & 0x01)
+      {
+        usb_port_is_open = 1; /* Python script or Serial Terminal opened the port */
+      }
+      else
+      {
+        usb_port_is_open = 0; /* Port closed */
+      }
+    }
     break;
 
   case CDC_SEND_BREAK:
