@@ -30,7 +30,7 @@ volatile uint8_t usb_data_ready   = 0;
 volatile uint8_t usb_port_is_open = 0;
 
 #define JUMP_ADDRESS         (uint32_t) (0x08004000)
-#define CONFIG_FLASH_ADDRESS (uint32_t) (0x0801F400)
+#define CONFIG_FLASH_ADDRESS (uint32_t) (0x0801E000)
 #define MAGIC_WORD           "enter bootloader"
 #define MAGIC_WORD_LEN       16
 
@@ -111,9 +111,9 @@ int main(void)
 
     /* TOTAL PAGES = 128 (128KB total)
      * Bootloader uses 16 pages (0 to 15).
-     * Config page uses the final 3 pages for margin safety (125 to 127).
-     * Pages left over for Application code space = 128 - 16 - 3 = 109 pages. */
-    EraseInitStruct.NbPages = 109;
+     * Config page uses the final 8 pages for margin safety (120 to 127).
+     * Pages left over for Application code space = 128 - 16 - 8 = 104 pages. */
+    EraseInitStruct.NbPages = 104;
 
     if (HAL_FLASHEx_Erase(&EraseInitStruct, &PageError) != HAL_OK)
     {
